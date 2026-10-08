@@ -46,3 +46,7 @@ yarn-error.*
 # logs dos emuladores do Firebase
 *-debug.log
 
+
+# credenciais administrativas: nunca versionar chaves de conta de serviço
+*firebase-adminsdk*.json
+serviceAccount*.json
