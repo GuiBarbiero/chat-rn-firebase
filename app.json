@@ -41,6 +41,12 @@
           "microphonePermission": false
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e077e96d-9020-460b-bc02-29f515aed56d"
+      }
+    },
+    "owner": "guibarbiero"
   }
 }
