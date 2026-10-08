@@ -103,7 +103,13 @@ npx eas-cli@latest init
 npx eas-cli@latest build --platform android --profile preview
 ```
 
-O perfil `preview` gera um APK instalável direto no aparelho. Para desenvolver com recarregamento rápido, use o perfil `development` (development build) e depois:
+O perfil `preview` gera um APK instalável direto no aparelho. O `app.json` está vinculado ao projeto EAS da equipe (`owner` e `extra.eas.projectId`): para gerar o build com outra conta Expo, remova esses dois campos antes de rodar `eas init`. Sem conta Expo, o build também pode ser feito na própria máquina, com o Android Studio (SDK e JDK) instalado e um aparelho ou emulador conectado:
+
+```bash
+npx expo run:android
+```
+
+Para desenvolver com recarregamento rápido, use o perfil `development` (development build) e depois:
 
 ```bash
 npx expo start --dev-client
@@ -400,4 +406,11 @@ Capturados com dados de teste nos emuladores do Firebase.
 
 ## Evidência de notificação recebida
 
-<img src="docs/screenshots/notificacao.png" width="240" alt="Notificação push recebida no aparelho">
+Para reproduzir o recebimento de uma notificação com a API publicada:
+
+1. Instale o app em um Android por build nativo (veja [Instalação e execução do aplicativo](#instalação-e-execução-do-aplicativo)), crie uma conta e aceite a permissão de notificações. A tela de conversas avisa se o aparelho ficou sem token de push.
+2. Em um segundo aparelho, ou no navegador com `npx expo start --web`, crie outra conta.
+3. Abra `https://chat-rn-firebase-api.onrender.com/health` para confirmar que a API está acordada (no plano gratuito a primeira resposta pode levar até 50 segundos).
+4. Deixe o app do primeiro aparelho em segundo plano ou fechado e, pela outra conta, inicie uma conversa com ele e envie uma mensagem.
+5. O aparelho exibe a notificação com o nome de quem enviou (em grupos, o nome do grupo) e, ao tocar nela, o app abre a conversa. O texto da mensagem não aparece na notificação.
+6. Para as políticas de grupo, crie um grupo com as duas contas, troque a política na edição do grupo e repita o envio; a tabela em [Política de notificações](#política-de-notificações) diz quem deve receber em cada caso.
