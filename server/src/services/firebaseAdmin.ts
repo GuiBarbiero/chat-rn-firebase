@@ -32,10 +32,12 @@ export const rtdb = getDatabase(app);
 export const messaging = getMessaging(app);
 
 /**
- * Pede um token de acesso ao Google com a credencial configurada. Uma chave que só "parece" válida
- * (revogada, de outro projeto, e-mail trocado) é recusada aqui, antes de a API aceitar requisições.
+ * Confere a credencial antes de a API aceitar requisições. O token de acesso pedido ao Google
+ * recusa chave revogada ou e-mail trocado; a leitura no Firestore recusa conta de outro projeto
+ * ou sem permissão neste (o token sozinho não diz a qual projeto a conta pertence).
  */
 export async function verifyCredential(): Promise<void> {
   if (usingEmulators) return;
   await app.options.credential?.getAccessToken();
+  await firestore.doc('pushReceipts/verificacao-inicial').get();
 }

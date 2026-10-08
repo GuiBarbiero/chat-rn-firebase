@@ -21,9 +21,12 @@ export type ChatMessage = {
   createdAt: number;
 };
 
-/** Formato gravado em messages/{conversationId}/{messageId} (o Realtime Database omite arrays vazios). */
+/**
+ * Formato gravado em messages/{conversationId}/{messageId}. O Realtime Database omite arrays vazios
+ * e devolve objeto quando os índices são esparsos.
+ */
 export type StoredMessage = Omit<ChatMessage, 'id' | 'conversationId' | 'mentionedUserIds'> & {
-  mentionedUserIds?: string[];
+  mentionedUserIds?: string[] | Record<string, string>;
 };
 
 export type NewMessage = Omit<ChatMessage, 'id' | 'createdAt'>;

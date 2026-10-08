@@ -1,9 +1,10 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import * as authService from '../services/authService';
-import { unregisterDevice } from '../services/notificationService';
+import { registerDevice, unregisterDevice } from '../services/notificationService';
 import { listenToUserProfile } from '../services/userService';
 import type { ChatUser, SignUpInput } from '../types/user';
+import { AppError } from '../utils/errors';
 
 export type AuthContextValue = {
   /** Usuário autenticado com perfil carregado; null quando não há sessão. */
@@ -59,12 +60,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const uid = user?.uid;
     if (uid) {
       // Remove o token deste aparelho antes de sair, enquanto ainda há permissão para isso.
-      // A espera é limitada: sem internet o Firestore só confirma a exclusão quando a conexão volta,
-      // e o logout não pode ficar preso. Se o tempo esgotar, o token sai quando o FCM o invalidar.
-      await Promise.race([
-        unregisterDevice(uid).catch(() => undefined),
-        new Promise((resolve) => setTimeout(resolve, LOGOUT_WAIT_MS)),
+      // O token é do aparelho e continua válido depois do logout: sair sem a confirmação da exclusão
+      // deixaria este aparelho recebendo os pushes da conta. Sem internet a confirmação não chega,
+      // então a espera é limitada e o logout é recusado em vez de ficar preso.
+      const removed = await Promise.race([
+        unregisterDevice(uid).then(() => true, () => true), // exclusão rejeitada: segue para o logout
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), LOGOUT_WAIT_MS)),
       ]);
+      if (!removed) {
+        // A exclusão continua na fila do Firestore: regrava o registro para a conta não ficar sem
+        // push quando a conexão voltar.
+        void registerDevice(uid).catch(() => undefined);
+        throw new AppError('Sem conexão: não foi possível sair agora. Tente novamente.');
+      }
     }
     await authService.signOut();
   }, [user?.uid]);

@@ -27,6 +27,7 @@ import {
 import {
   collection,
   connectFirestoreEmulator,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -269,6 +270,9 @@ async function main(): Promise<void> {
   await expectRule('não aceita menções com chave que não seja índice de lista', 'denied', () =>
     sendMessage(ana, groupId, message(ana, 'group', { mentionedUserIds: { foo: bia.uid } })),
   );
+  await expectRule('não aceita índice de menção com zero à esquerda', 'denied', () =>
+    sendMessage(ana, groupId, message(ana, 'group', { mentionedUserIds: { '07': bia.uid } })),
+  );
 
   // A janela do chat é ordenada pelo horário do servidor (mesma consulta de chatService.listenToMessages),
   // então uma chave "maior" escolhida por um participante não esconde as mensagens novas.
@@ -299,6 +303,9 @@ async function main(): Promise<void> {
   await expectApi('mentioned_members: mensagem geral não notifica', { status: 'skipped', recipients: 0 }, notify(ana, groupId, general2));
   await expectApi('mentioned_members: destinatário selecionado', { status: 'sent', recipients: 1 }, notify(ana, groupId, targeted));
   await expectApi('mentioned_members: mencionados', { status: 'sent', recipients: 2 }, notify(ana, groupId, mentioned));
+  // Índice esparso passa nas regras e volta do banco como objeto, não como lista.
+  const sparse = await sendMessage(ana, groupId, message(ana, 'group', { mentionedUserIds: { 42: bia.uid } }));
+  await expectApi('mentioned_members: menção em índice esparso', { status: 'sent', recipients: 1 }, notify(ana, groupId, sparse));
 
   for (const policy of ['direct_messages_only', 'disabled']) {
     await api(ana, 'PATCH', `/groups/${groupId}`, { notificationPolicy: policy });
@@ -307,6 +314,23 @@ async function main(): Promise<void> {
   }
   await expectApi('conversa individual: notifica o outro participante', { status: 'sent', recipients: 1 }, notify(ana, anaBia, directMessageId));
   await expectApi('não participante não pede push da conversa: 403', 403, notify(caio, anaBia, directMessageId));
+
+  // Provedor de push fora do ar (a API roda neste processo, então o fetch dela é este mesmo).
+  const biaDevice = doc(bia.db, 'users', bia.uid, 'devices', 'aparelho-de-teste');
+  await setDoc(biaDevice, { token: 'ExponentPushToken[teste]', platform: 'ios', enabled: true, updatedAt: Date.now() });
+  const realFetch = globalThis.fetch;
+  let expoOnline = false;
+  globalThis.fetch = (input, init) => {
+    if (!String(input).startsWith('https://exp.host')) return realFetch(input, init);
+    if (!expoOnline) return Promise.reject(new Error('Expo fora do ar (simulado)'));
+    return Promise.resolve(Response.json({ data: [{ status: 'ok' }] }));
+  };
+  const unsent = await sendMessage(ana, anaBia, message(ana, 'direct'));
+  await expectApi('provedor fora do ar e nada entregue: 500', 500, notify(ana, anaBia, unsent));
+  expoOnline = true;
+  await expectApi('nova tentativa envia (recibo foi liberado)', { status: 'sent', sent: 1 }, notify(ana, anaBia, unsent));
+  globalThis.fetch = realFetch;
+  await deleteDoc(biaDevice);
 
   console.log('\n# Remoção de integrante');
   let cancelled = false;

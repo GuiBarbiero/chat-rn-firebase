@@ -167,7 +167,7 @@ O app entregue já está configurado: cloud name `qepoxwoi` e upload preset `cha
 
 ## Notificações no Android e no iOS
 
-O app pede a permissão de notificações, obtém o token do dispositivo e o grava em `users/{uid}/devices/{deviceId}` ([src/services/notificationService.ts](src/services/notificationService.ts)). O documento é atualizado quando o sistema troca o token e é apagado no logout. O envio nunca acontece no app: é sempre a API.
+O app pede a permissão de notificações, obtém o token do dispositivo e o grava em `users/{uid}/devices/{deviceId}` ([src/services/notificationService.ts](src/services/notificationService.ts)). O documento é atualizado quando o sistema troca o token e é apagado no logout; sem conexão a exclusão não pode ser confirmada, então o app avisa e mantém a sessão em vez de sair deixando o aparelho registrado. O envio nunca acontece no app: é sempre a API.
 
 ### Android
 
@@ -205,7 +205,7 @@ Resposta esperada: `{"status":"ok","uptimeSeconds":123,"timestamp":"..."}`.
 
 O plano gratuito do Render suspende o serviço após 15 minutos sem requisições, e a primeira chamada depois disso pode levar cerca de um minuto. Para reduzir esse efeito, o app chama `/health` ao abrir e o workflow [.github/workflows/keep-alive.yml](.github/workflows/keep-alive.yml) faz o mesmo a cada 10 minutos. Manter o serviço acordado o mês inteiro usa cerca de 744 das 750 horas gratuitas do workspace, então ele deve ser o único Web Service gratuito ali.
 
-Ao iniciar, a API pede um token de acesso ao Google com a credencial configurada. Se a chave for recusada (revogada, de outro projeto, e-mail trocado), o processo termina e o deploy aparece como falho, em vez de subir um serviço que responderia erro em toda chamada ao Firebase. Um `/health` com resposta 200 significa, portanto, que a credencial foi aceita.
+Ao iniciar, a API pede um token de acesso ao Google com a credencial configurada e faz uma leitura no Firestore do projeto. Se a chave for recusada (revogada, e-mail trocado) ou a conta não tiver acesso a este projeto, o processo termina e o deploy aparece como falho, em vez de subir um serviço que responderia erro em toda chamada ao Firebase. Uma falha de rede nessa checagem também encerra o processo, e a hospedagem o reinicia. Um `/health` com resposta 200 significa, portanto, que a credencial foi aceita e lê o Firestore do projeto.
 
 ### Endpoints
 
@@ -323,7 +323,7 @@ Arquivos versionados: [firestore.rules](firestore.rules) e [database.rules.json]
 - `messages/{conversationId}`: lê e envia quem participa da conversa. Em conversa individual, o `uid` precisa fazer parte do id; em grupo, precisa existir `groupMembers/{groupId}/{uid}`.
 - O `senderId` tem de ser o `uid` autenticado e o `createdAt` tem de ser o horário do servidor.
 - Mensagens são imutáveis: não podem ser editadas nem apagadas pelo cliente.
-- Destinatário e menções precisam ser integrantes do grupo. As menções têm de ser uma lista de até 100 integrantes; texto solto, Base64 ou qualquer outro formato é rejeitado, assim como campos desconhecidos e prioridades definidas pelo cliente.
+- Destinatário e menções precisam ser integrantes do grupo. As menções só aceitam integrantes do grupo em índices de lista (0 a 99, no máximo 100); texto solto, Base64 ou qualquer outra chave é rejeitado, assim como campos desconhecidos e prioridades definidas pelo cliente.
 - O chat lê as mensagens ordenadas pelo `createdAt` do servidor (índice `.indexOn`), e não pela chave, que é escolhida pelo cliente. Assim ninguém consegue esconder mensagens novas forjando chaves.
 - `groupMembers` não pode ser lido nem gravado por clientes.
 - Um integrante removido perde o acesso na hora: novas leituras e envios são negados e o listener que estava aberto é cancelado pelo servidor. A API revoga o acesso às mensagens antes de atualizar o grupo no Firestore, então uma falha no meio do caminho deixa a pessoa sem acesso e ainda listada (o proprietário remove de novo), nunca o contrário.

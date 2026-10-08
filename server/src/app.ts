@@ -48,11 +48,12 @@ app.use(errorHandler);
 
 const port = Number(process.env.PORT) || 3000;
 
-// Só aceita requisições depois de o Google confirmar a credencial. Se ela for recusada, o processo
-// termina e a hospedagem marca o deploy como falho, em vez de subir uma API que responderia 500.
+// Só aceita requisições depois de confirmar a credencial. Se a checagem falhar (credencial recusada
+// ou Google fora de alcance), o processo termina e a hospedagem marca o deploy como falho ou
+// reinicia o serviço, em vez de subir uma API que responderia 500.
 verifyCredential()
   .then(() => app.listen(port, () => console.log(`API ouvindo na porta ${port}`)))
   .catch((error: unknown) => {
-    console.error('Credencial do Firebase recusada pelo Google:', error instanceof Error ? error.message : error);
+    console.error('Falha ao validar a credencial do Firebase:', error instanceof Error ? error.message : error);
     process.exit(1);
   });

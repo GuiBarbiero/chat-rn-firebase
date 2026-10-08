@@ -93,7 +93,8 @@ notificationsRouter.post('/messages', async (req, res) => {
             senderId: req.uid,
             policy: conversation.policy,
             target: message.target,
-            mentionedUserIds: message.mentionedUserIds ?? [],
+            // Com índices esparsos o Realtime Database devolve objeto em vez de lista.
+            mentionedUserIds: Object.values<string>(message.mentionedUserIds ?? {}),
           },
     );
     if (recipients.length === 0) {

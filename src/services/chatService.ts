@@ -81,7 +81,8 @@ export function listenToMessages(
           ...stored,
           id: child.key,
           conversationId,
-          mentionedUserIds: stored.mentionedUserIds ?? [],
+          // Com índices esparsos o Realtime Database devolve objeto em vez de lista.
+          mentionedUserIds: Object.values<string>(stored.mentionedUserIds ?? {}),
         });
       });
       onData(messages);

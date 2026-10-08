@@ -104,5 +104,9 @@ export async function sendPush(devices: readonly Device[], content: PushContent)
   });
   const sent = results.reduce((total, result) => total + result.sent, 0);
   await Promise.allSettled(results.flatMap((result) => result.invalid).map((device) => device.ref.delete()));
+  // Nada foi entregue e um provedor falhou: não há push repetido a evitar, então o erro sobe, a rota
+  // libera o recibo e o app avisa que a notificação não foi disparada.
+  const failure = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected');
+  if (failure && sent === 0) throw failure.reason;
   return { sent, failed: devices.length - sent };
 }

@@ -12,7 +12,8 @@ export type StoredMessage = {
   senderId: string;
   text: string;
   target: MessageTarget;
-  mentionedUserIds?: string[];
+  /** Lista no app; o Realtime Database devolve objeto quando os índices são esparsos. */
+  mentionedUserIds?: string[] | Record<string, string>;
   createdAt: number;
 };
 

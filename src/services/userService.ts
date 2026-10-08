@@ -38,6 +38,8 @@ export function listenToUserProfile(
 ): Unsubscribe {
   return onSnapshot(
     userRef(uid),
+    // Necessário para a resposta do servidor "não existe" chegar depois de um cache vazio ignorado.
+    { includeMetadataChanges: true },
     (snapshot) => {
       // Sem internet e com o cache vazio, o SDK responde "não existe" a partir do cache.
       // Isso não quer dizer perfil ausente: espera a resposta do servidor.

@@ -40,7 +40,7 @@
           "mentionedUserIds": {
             ".validate": "newData.hasChildren() && newData.getPriority() === null",
             "$index": {
-              ".validate": "$index.matches(/^[0-9]{1,2}$/) && newData.isString() && newData.getPriority() === null && root.child('groupMembers').child($conversationId).child(newData.val()).val() === true"
+              ".validate": "$index.matches(/^(0|[1-9][0-9]?)$/) && newData.isString() && newData.getPriority() === null && root.child('groupMembers').child($conversationId).child(newData.val()).val() === true"
             }
           },
           "$other": {
