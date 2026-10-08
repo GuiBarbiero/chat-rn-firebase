@@ -6,8 +6,11 @@ import { getMessaging } from 'firebase-admin/messaging';
 
 const projectId = process.env.FIREBASE_PROJECT_ID;
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-// Hospedagens guardam a chave em uma linha, com "\n" literais.
-const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+// A chave costuma ser colada direto do JSON da conta de serviço: em uma linha, com "\n" literais
+// e às vezes ainda entre aspas. Normaliza esses formatos para o PEM que o Admin SDK espera.
+const privateKey = process.env.FIREBASE_PRIVATE_KEY?.trim()
+  .replace(/^"|"$/g, '')
+  .replace(/\\n/g, '\n');
 
 const usingEmulators = Boolean(process.env.FIRESTORE_EMULATOR_HOST);
 
