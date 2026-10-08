@@ -1,0 +1,29 @@
+{
+  "name": "chat-rn-firebase-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "API que valida operações de grupo e envia as notificações push do chat",
+  "main": "dist/app.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/app.ts",
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "test": "tsx --test src/services/recipientResolver.test.ts",
+    "test:emulators": "tsx scripts/emulator-check.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "firebase-admin": "^14.5.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

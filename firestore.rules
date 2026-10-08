@@ -1,0 +1,130 @@
+rules_version = '2';
+
+// Cloud Firestore: perfis, grupos, conversas individuais e tokens de dispositivos.
+// As mensagens ficam no Realtime Database (veja database.rules.json).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Somente usuários autenticados por e-mail e senha.
+    function signedIn() {
+      return request.auth != null && request.auth.token.firebase.sign_in_provider == 'password';
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Mesmo formato de src/utils/conversationId.ts: os dois uid ordenados e unidos por "_".
+    function directId(a, b) {
+      return a < b ? a + '_' + b : b + '_' + a;
+    }
+
+    function sharesDirectConversation(uid) {
+      return exists(/databases/$(database)/documents/directConversations/$(directId(request.auth.uid, uid)));
+    }
+
+    // userGroups/{uid}.groupIds é mantido somente pela API (Admin SDK).
+    function groupIdsOf(uid) {
+      return get(/databases/$(database)/documents/userGroups/$(uid)).data.groupIds;
+    }
+
+    function sharesGroup(uid) {
+      return groupIdsOf(request.auth.uid).hasAny(groupIdsOf(uid));
+    }
+
+    // Só URL https (ou vazio): imagens em Base64 nunca são aceitas.
+    function validPhotoUrl(url) {
+      return url is string && (url == '' || url.matches('https://.{1,500}'));
+    }
+
+    function validName(name) {
+      return name is string && name.size() > 0 && name.size() <= 60;
+    }
+
+    function validUser(data) {
+      return data.keys().hasOnly(['name', 'email', 'phoneNumber', 'birthDate', 'photoUrl', 'createdAt'])
+        && data.keys().hasAll(['name', 'email', 'phoneNumber', 'birthDate', 'photoUrl', 'createdAt'])
+        && validName(data.name)
+        && data.email is string
+        && data.phoneNumber is string && data.phoneNumber.size() <= 20
+        && data.birthDate is string && data.birthDate.size() <= 10
+        && validPhotoUrl(data.photoUrl)
+        && data.createdAt is int;
+    }
+
+    function validDevice(data) {
+      return data.keys().hasOnly(['token', 'platform', 'enabled', 'updatedAt'])
+        && data.keys().hasAll(['token', 'platform', 'enabled', 'updatedAt'])
+        && data.token is string && data.token.size() > 0 && data.token.size() <= 4096
+        && data.platform in ['android', 'ios']
+        && data.enabled is bool
+        && data.updatedAt is int;
+    }
+
+    // Perfil público (nome e foto): é o que aparece na lista de usuários.
+    match /publicProfiles/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isSelf(uid)
+        && request.resource.data.keys().hasOnly(['name', 'photoUrl'])
+        && request.resource.data.keys().hasAll(['name', 'photoUrl'])
+        && validName(request.resource.data.name)
+        && validPhotoUrl(request.resource.data.photoUrl);
+      allow delete: if false;
+    }
+
+    // Dados cadastrais (e-mail, celular, nascimento): só o dono ou quem compartilha
+    // uma conversa individual ou um grupo com ele. Não existe "list": ninguém varre a coleção.
+    match /users/{uid} {
+      allow get: if isSelf(uid) || (signedIn() && (sharesDirectConversation(uid) || sharesGroup(uid)));
+      allow create: if isSelf(uid)
+        && validUser(request.resource.data)
+        && request.resource.data.email == request.auth.token.email;
+      allow update: if isSelf(uid)
+        && validUser(request.resource.data)
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+
+      // Tokens de push: somente o dono lê e grava. A API lê pelo Admin SDK.
+      match /devices/{deviceId} {
+        allow read, delete: if isSelf(uid);
+        allow create, update: if isSelf(uid) && validDevice(request.resource.data);
+      }
+    }
+
+    // Conversa individual: exatamente dois participantes distintos, em ordem, e o id
+    // derivado deles. Isso impede conversa consigo mesmo e duplicidade para o mesmo par.
+    match /directConversations/{conversationId} {
+      allow get: if signedIn() && request.auth.uid in conversationId.split('_');
+      allow list: if signedIn() && request.auth.uid in resource.data.participantIds;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['participantIds', 'createdAt'])
+        && request.resource.data.participantIds is list
+        && request.resource.data.participantIds.size() == 2
+        && request.auth.uid in request.resource.data.participantIds
+        && request.resource.data.participantIds[0] < request.resource.data.participantIds[1]
+        && conversationId == request.resource.data.participantIds[0] + '_' + request.resource.data.participantIds[1]
+        && exists(/databases/$(database)/documents/publicProfiles/$(request.resource.data.participantIds[0]))
+        && exists(/databases/$(database)/documents/publicProfiles/$(request.resource.data.participantIds[1]))
+        && request.resource.data.createdAt is int;
+      allow update, delete: if false;
+    }
+
+    // Grupos: integrantes leem em tempo real. Nenhum cliente grava: criar, alterar limite/política
+    // e adicionar/remover integrantes passam pela API, que valida proprietário e capacidade em
+    // transação e espelha os integrantes no Realtime Database.
+    match /groups/{groupId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
+      allow write: if false;
+    }
+
+    // Coleções internas da API (Admin SDK ignora as regras).
+    match /userGroups/{uid} {
+      allow read, write: if false;
+    }
+
+    match /pushReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+  }
+}

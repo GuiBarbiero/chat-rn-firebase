@@ -1,0 +1,18 @@
+# O plano gratuito do Render suspende o serviço após 15 minutos sem requisições.
+# Este agendamento chama o health check para a API ficar pronta durante a correção.
+name: Manter API acordada
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health check
+        run: curl --fail --silent --show-error --max-time 90 "$API_URL/health"
+        env:
+          # Para trocar a URL sem editar o arquivo, crie a variável de repositório API_URL.
+          API_URL: ${{ vars.API_URL || 'https://chat-rn-firebase-api.onrender.com' }}

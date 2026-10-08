@@ -1,0 +1,22 @@
+# Blueprint do Render: publica a API (pasta server/) como um Web Service.
+# Os dois valores marcados com "sync: false" são segredos e o Render pede no painel ao criar o serviço.
+services:
+  - type: web
+    name: chat-rn-firebase-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: FIREBASE_PROJECT_ID
+        value: chat-rn-firebase-a38c7
+      - key: FIREBASE_DATABASE_URL
+        value: https://chat-rn-firebase-a38c7-default-rtdb.firebaseio.com
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
