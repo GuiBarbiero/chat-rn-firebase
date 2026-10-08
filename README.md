@@ -203,7 +203,9 @@ curl https://chat-rn-firebase-api.onrender.com/health
 
 Resposta esperada: `{"status":"ok","uptimeSeconds":123,"timestamp":"..."}`.
 
-O plano gratuito do Render suspende o serviço após 15 minutos sem requisições, e a primeira chamada depois disso pode levar cerca de um minuto. Para reduzir esse efeito, o app chama `/health` ao abrir e o workflow [.github/workflows/keep-alive.yml](.github/workflows/keep-alive.yml) faz o mesmo a cada 10 minutos.
+O plano gratuito do Render suspende o serviço após 15 minutos sem requisições, e a primeira chamada depois disso pode levar cerca de um minuto. Para reduzir esse efeito, o app chama `/health` ao abrir e o workflow [.github/workflows/keep-alive.yml](.github/workflows/keep-alive.yml) faz o mesmo a cada 10 minutos. Manter o serviço acordado o mês inteiro usa cerca de 744 das 750 horas gratuitas do workspace, então ele deve ser o único Web Service gratuito ali.
+
+Ao iniciar, a API pede um token de acesso ao Google com a credencial configurada. Se a chave for recusada (revogada, de outro projeto, e-mail trocado), o processo termina e o deploy aparece como falho, em vez de subir um serviço que responderia erro em toda chamada ao Firebase. Um `/health` com resposta 200 significa, portanto, que a credencial foi aceita.
 
 ### Endpoints
 
@@ -252,6 +254,8 @@ npm run dev
 1. No painel do Render: **New → Blueprint** e selecione este repositório. O arquivo [render.yaml](render.yaml) já descreve o serviço (pasta `server/`, build, start e health check).
 2. O Render pede os dois segredos: `FIREBASE_CLIENT_EMAIL` e `FIREBASE_PRIVATE_KEY`. São os campos `client_email` e `private_key` do arquivo JSON da chave de uma conta de serviço do projeto (veja abaixo).
 3. Depois do deploy, confirme com `/health` e, se a URL for diferente da documentada, atualize `src/config.ts` e a variável `API_URL` do workflow.
+
+A `private_key` pode ser colada como está no JSON: com os `\n` literais, com ou sem aspas, em uma ou várias linhas. A API reconstrói o formato esperado ([server/src/privateKey.ts](server/src/privateKey.ts)).
 
 **Conta de serviço com o menor privilégio.** Em vez da conta padrão `firebase-adminsdk` (que tem permissões amplas), crie uma conta dedicada no [Google Cloud IAM](https://console.cloud.google.com/iam-admin/serviceaccounts) do projeto com apenas estes papéis e gere a chave JSON dela:
 
@@ -308,7 +312,7 @@ Arquivos versionados: [firestore.rules](firestore.rules) e [database.rules.json]
 
 - Tudo exige usuário autenticado **por e-mail e senha**.
 - `publicProfiles/{uid}`: qualquer autenticado lê; só o dono grava (nome e foto).
-- `users/{uid}`: só o dono ou quem compartilha uma conversa individual ou um grupo com ele consegue ler. Não há permissão de listagem, então ninguém varre os cadastros.
+- `users/{uid}`: só o dono ou quem compartilha uma conversa individual ou um grupo com ele consegue ler, e a coleção não pode ser listada nem consultada. Como define o enunciado, compartilhar uma conversa basta: quem inicia uma conversa individual com alguém, ou o tem como integrante de um grupo, passa a ver os dados cadastrais dessa pessoa (é o que a foto no chat abre).
 - `users/{uid}/devices`: somente o dono lê e grava; tokens nunca ficam públicos.
 - `directConversations/{id}`: só os participantes leem. A criação exige exatamente dois participantes distintos, em ordem, com o id derivado deles, o que impede conversa consigo mesmo e duas conversas para o mesmo par.
 - `groups/{id}`: só integrantes leem; nenhum cliente grava.
@@ -319,9 +323,10 @@ Arquivos versionados: [firestore.rules](firestore.rules) e [database.rules.json]
 - `messages/{conversationId}`: lê e envia quem participa da conversa. Em conversa individual, o `uid` precisa fazer parte do id; em grupo, precisa existir `groupMembers/{groupId}/{uid}`.
 - O `senderId` tem de ser o `uid` autenticado e o `createdAt` tem de ser o horário do servidor.
 - Mensagens são imutáveis: não podem ser editadas nem apagadas pelo cliente.
-- Destinatário e menções precisam ser integrantes do grupo; campos desconhecidos são rejeitados.
+- Destinatário e menções precisam ser integrantes do grupo. As menções têm de ser uma lista de até 100 integrantes; texto solto, Base64 ou qualquer outro formato é rejeitado, assim como campos desconhecidos e prioridades definidas pelo cliente.
+- O chat lê as mensagens ordenadas pelo `createdAt` do servidor (índice `.indexOn`), e não pela chave, que é escolhida pelo cliente. Assim ninguém consegue esconder mensagens novas forjando chaves.
 - `groupMembers` não pode ser lido nem gravado por clientes.
-- Um integrante removido perde o acesso na hora: novas leituras e envios são negados e o listener que estava aberto é cancelado pelo servidor.
+- Um integrante removido perde o acesso na hora: novas leituras e envios são negados e o listener que estava aberto é cancelado pelo servidor. A API revoga o acesso às mensagens antes de atualizar o grupo no Firestore, então uma falha no meio do caminho deixa a pessoa sem acesso e ainda listada (o proprietário remove de novo), nunca o contrário.
 
 Nenhuma regra é aberta (`".read": true`).
 

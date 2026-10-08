@@ -8,37 +8,39 @@
     },
     "messages": {
       "$conversationId": {
+        ".indexOn": ["createdAt"],
         ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && ($conversationId.beginsWith(auth.uid + '_') || $conversationId.endsWith('_' + auth.uid) || root.child('groupMembers').child($conversationId).child(auth.uid).val() === true)",
         "$messageId": {
           ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && !data.exists() && newData.exists() && ($conversationId.beginsWith(auth.uid + '_') || $conversationId.endsWith('_' + auth.uid) || root.child('groupMembers').child($conversationId).child(auth.uid).val() === true)",
-          ".validate": "newData.hasChildren(['conversationType', 'senderId', 'text', 'target', 'createdAt'])",
+          ".validate": "newData.hasChildren(['conversationType', 'senderId', 'text', 'target', 'createdAt']) && newData.getPriority() === null",
           "conversationType": {
-            ".validate": "(newData.val() === 'direct' && $conversationId.contains('_')) || (newData.val() === 'group' && !$conversationId.contains('_'))"
+            ".validate": "((newData.val() === 'direct' && $conversationId.contains('_')) || (newData.val() === 'group' && !$conversationId.contains('_'))) && newData.getPriority() === null"
           },
           "senderId": {
-            ".validate": "newData.val() === auth.uid"
+            ".validate": "newData.val() === auth.uid && newData.getPriority() === null"
           },
           "text": {
-            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 2000"
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 2000 && newData.getPriority() === null"
           },
           "createdAt": {
-            ".validate": "newData.val() === now"
+            ".validate": "newData.val() === now && newData.getPriority() === null"
           },
           "target": {
-            ".validate": "(newData.child('type').val() === 'conversation' && !newData.child('memberId').exists()) || (newData.child('type').val() === 'member' && newData.child('memberId').isString() && root.child('groupMembers').child($conversationId).child(newData.child('memberId').val()).val() === true)",
+            ".validate": "((newData.child('type').val() === 'conversation' && !newData.child('memberId').exists()) || (newData.child('type').val() === 'member' && newData.child('memberId').isString() && root.child('groupMembers').child($conversationId).child(newData.child('memberId').val()).val() === true)) && newData.getPriority() === null",
             "type": {
-              ".validate": true
+              ".validate": "newData.getPriority() === null"
             },
             "memberId": {
-              ".validate": true
+              ".validate": "newData.getPriority() === null"
             },
             "$other": {
               ".validate": false
             }
           },
           "mentionedUserIds": {
+            ".validate": "newData.hasChildren() && newData.getPriority() === null",
             "$index": {
-              ".validate": "newData.isString() && root.child('groupMembers').child($conversationId).child(newData.val()).val() === true"
+              ".validate": "$index.matches(/^[0-9]{1,2}$/) && newData.isString() && newData.getPriority() === null && root.child('groupMembers').child($conversationId).child(newData.val()).val() === true"
             }
           },
           "$other": {

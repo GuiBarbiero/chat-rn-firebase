@@ -22,7 +22,7 @@ export async function ensureUserProfile(uid: string, email: string): Promise<voi
   if (snapshot.exists()) return;
   await createUserProfile({
     uid,
-    name: email.split('@')[0] || 'Usuário',
+    name: (email.split('@')[0] || 'Usuário').slice(0, 60), // as regras limitam o nome a 60 caracteres
     email,
     phoneNumber: '',
     birthDate: '',
@@ -38,7 +38,12 @@ export function listenToUserProfile(
 ): Unsubscribe {
   return onSnapshot(
     userRef(uid),
-    (snapshot) => onData(snapshot.exists() ? readDoc<ChatUser>(snapshot, 'uid') : null),
+    (snapshot) => {
+      // Sem internet e com o cache vazio, o SDK responde "não existe" a partir do cache.
+      // Isso não quer dizer perfil ausente: espera a resposta do servidor.
+      if (!snapshot.exists() && snapshot.metadata.fromCache) return;
+      onData(snapshot.exists() ? readDoc<ChatUser>(snapshot, 'uid') : null);
+    },
     onError,
   );
 }

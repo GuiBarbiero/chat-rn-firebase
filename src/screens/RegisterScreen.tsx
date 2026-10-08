@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { Avatar } from '../components/Avatar';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { FormScrollView } from '../components/FormScrollView';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
@@ -71,7 +72,7 @@ export function RegisterScreen(_props: ScreenProps<'Register'>) {
   }, [form, photo, signUp]);
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <FormScrollView contentContainerStyle={styles.content}>
       <Pressable accessibilityRole="button" onPress={handlePickPhoto} disabled={loading} style={styles.photo}>
         <Avatar uri={photo} size={96} />
         <Text style={styles.link}>{photo ? 'Trocar foto de perfil' : 'Escolher foto de perfil'}</Text>
@@ -127,7 +128,7 @@ export function RegisterScreen(_props: ScreenProps<'Register'>) {
 
       <ErrorMessage message={error} />
       <PrimaryButton title="Criar conta" onPress={handleSubmit} loading={loading} />
-    </ScrollView>
+    </FormScrollView>
   );
 }
 

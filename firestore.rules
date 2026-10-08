@@ -72,8 +72,9 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Dados cadastrais (e-mail, celular, nascimento): só o dono ou quem compartilha
-    // uma conversa individual ou um grupo com ele. Não existe "list": ninguém varre a coleção.
+    // Dados cadastrais (e-mail, celular, nascimento): só o dono ou quem compartilha uma conversa
+    // individual ou um grupo com ele (iniciar a conversa já conta, como define o enunciado).
+    // Não existe "list": a coleção não pode ser listada nem consultada.
     match /users/{uid} {
       allow get: if isSelf(uid) || (signedIn() && (sharesDirectConversation(uid) || sharesGroup(uid)));
       allow create: if isSelf(uid)

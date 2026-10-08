@@ -13,11 +13,15 @@ import {
   connectDatabaseEmulator,
   get,
   getDatabase,
+  limitToLast,
   onValue,
+  orderByChild,
   push,
+  query,
   ref,
   serverTimestamp,
   set,
+  setWithPriority,
   type Database,
 } from 'firebase/database';
 import {
@@ -209,6 +213,12 @@ async function main(): Promise<void> {
   await expectRule('não forja a data da mensagem', 'denied', () => sendMessage(ana, anaBia, message(ana, 'direct', { createdAt: 1 })));
   await expectRule('não envia texto vazio', 'denied', () => sendMessage(ana, anaBia, message(ana, 'direct', { text: '' })));
   await expectRule('não inclui campos extras', 'denied', () => sendMessage(ana, anaBia, message(ana, 'direct', { admin: true })));
+  await expectRule('não aceita menções que não sejam uma lista (ex.: Base64)', 'denied', () =>
+    sendMessage(ana, anaBia, message(ana, 'direct', { mentionedUserIds: `data:image/png;base64,${'A'.repeat(5000)}` })),
+  );
+  await expectRule('não aceita mensagem com prioridade definida pelo cliente', 'denied', () =>
+    setWithPriority(push(ref(ana.rtdb, `messages/${anaBia}`)), message(ana, 'direct'), 1),
+  );
   await expectRule('não altera mensagem já enviada', 'denied', () =>
     set(ref(ana.rtdb, `messages/${anaBia}/${directMessageId}`), message(ana, 'direct', { text: 'editada' })),
   );
@@ -256,6 +266,21 @@ async function main(): Promise<void> {
     sendMessage(ana, groupId, message(ana, 'group', { mentionedUserIds: [duda.uid] })),
   );
   await expectRule('tipo da mensagem precisa combinar com a conversa', 'denied', () => sendMessage(ana, groupId, message(ana, 'direct')));
+  await expectRule('não aceita menções com chave que não seja índice de lista', 'denied', () =>
+    sendMessage(ana, groupId, message(ana, 'group', { mentionedUserIds: { foo: bia.uid } })),
+  );
+
+  // A janela do chat é ordenada pelo horário do servidor (mesma consulta de chatService.listenToMessages),
+  // então uma chave "maior" escolhida por um participante não esconde as mensagens novas.
+  await set(ref(ana.rtdb, `messages/${groupId}/zzz-chave-forjada`), message(ana, 'group', { text: 'chave forjada' }));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const newest = await sendMessage(bia, groupId, message(bia, 'group', { text: 'mensagem nova' }));
+  const chatWindow = await get(query(ref(bia.rtdb, `messages/${groupId}`), orderByChild('createdAt'), limitToLast(1)));
+  let lastKey = '';
+  chatWindow.forEach((child) => {
+    lastKey = child.key;
+  });
+  report(lastKey === newest, 'mensagem nova continua sendo a última da janela do chat', `última: ${lastKey}`);
 
   console.log('\n# Políticas de notificação');
   const notify = (session: Session, conversationId: string, messageId: string) =>

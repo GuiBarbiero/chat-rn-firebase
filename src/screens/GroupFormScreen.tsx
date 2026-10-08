@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../components/Avatar';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { FormScrollView } from '../components/FormScrollView';
 import { GroupMemberItem } from '../components/GroupMemberItem';
 import { Loading } from '../components/Loading';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -129,7 +130,7 @@ export function GroupFormScreen({ navigation, route }: ScreenProps<'GroupForm'>)
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <FormScrollView contentContainerStyle={styles.content}>
       <Pressable accessibilityRole="button" onPress={handlePickPhoto} disabled={saving} style={styles.photo}>
         <Avatar uri={newPhoto ?? group?.photoUrl} size={96} kind="group" />
         <Text style={styles.link}>{newPhoto || group?.photoUrl ? 'Trocar foto do grupo' : 'Escolher foto do grupo'}</Text>
@@ -205,7 +206,7 @@ export function GroupFormScreen({ navigation, route }: ScreenProps<'GroupForm'>)
       <ErrorMessage message={formError} />
       <ErrorMessage message={notice} tone="info" />
       <PrimaryButton title={group ? 'Salvar alterações' : 'Criar grupo'} onPress={handleSave} loading={saving} />
-    </ScrollView>
+    </FormScrollView>
   );
 }
 

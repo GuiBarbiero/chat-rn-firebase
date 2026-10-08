@@ -1,4 +1,13 @@
-import { limitToLast, onValue, push, query as rtdbQuery, ref, serverTimestamp, set } from 'firebase/database';
+import {
+  limitToLast,
+  onValue,
+  orderByChild,
+  push,
+  query as rtdbQuery,
+  ref,
+  serverTimestamp,
+  set,
+} from 'firebase/database';
 import { collection, doc, onSnapshot, query, runTransaction, where, type Unsubscribe } from 'firebase/firestore';
 
 import type { ChatMessage, DirectConversation, NewMessage, StoredMessage } from '../types/chat';
@@ -61,7 +70,9 @@ export function listenToMessages(
   onError: (error: Error) => void,
 ): Unsubscribe {
   return onValue(
-    rtdbQuery(messagesRef(conversationId), limitToLast(MESSAGE_WINDOW)),
+    // Ordena pelo createdAt, que as regras obrigam a ser o horário do servidor. Ordenar pela chave
+    // deixaria um participante esconder as mensagens novas escolhendo chaves "maiores".
+    rtdbQuery(messagesRef(conversationId), orderByChild('createdAt'), limitToLast(MESSAGE_WINDOW)),
     (snapshot) => {
       const messages: ChatMessage[] = [];
       snapshot.forEach((child) => {

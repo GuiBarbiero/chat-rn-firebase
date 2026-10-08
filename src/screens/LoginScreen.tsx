@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ErrorMessage } from '../components/ErrorMessage';
+import { FormScrollView } from '../components/FormScrollView';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
@@ -36,11 +37,7 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
-      >
+      <FormScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Chat RN Firebase</Text>
         <Text style={styles.subtitle}>Entre com seu e-mail e senha</Text>
 
@@ -69,7 +66,7 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
         <Pressable accessibilityRole="button" disabled={loading} onPress={() => navigation.navigate('Register')}>
           <Text style={styles.link}>Não tem conta? Criar conta</Text>
         </Pressable>
-      </ScrollView>
+      </FormScrollView>
     </SafeAreaView>
   );
 }

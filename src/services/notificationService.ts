@@ -18,6 +18,8 @@ type PushToken = Pick<DeviceRegistration, 'token' | 'platform'>;
 
 let activeConversationId: string | null = null;
 let lastHandledNotificationId: string | null = null;
+/** "uid:token" do último registro gravado neste aparelho. */
+let lastSavedDevice: string | null = null;
 
 /** A conversa que está aberta não gera banner: a mensagem já aparece na tela em tempo real. */
 export function setActiveConversation(conversationId: string | null): void {
@@ -65,8 +67,17 @@ async function getPushToken(): Promise<PushToken> {
 }
 
 async function saveDevice(uid: string, pushToken: PushToken): Promise<void> {
-  const registration: DeviceRegistration = { ...pushToken, enabled: true, updatedAt: Date.now() };
-  await setDoc(doc(db, 'users', uid, 'devices', await getDeviceId()), registration);
+  // O mesmo token chega mais de uma vez (registro + evento do sistema): grava só quando muda.
+  const key = `${uid}:${pushToken.token}`;
+  if (key === lastSavedDevice) return;
+  lastSavedDevice = key;
+  try {
+    const registration: DeviceRegistration = { ...pushToken, enabled: true, updatedAt: Date.now() };
+    await setDoc(doc(db, 'users', uid, 'devices', await getDeviceId()), registration);
+  } catch (error) {
+    lastSavedDevice = null;
+    throw error;
+  }
 }
 
 /** Pede a permissão, obtém o token e registra o dispositivo em users/{uid}/devices/{deviceId}. */
@@ -96,10 +107,17 @@ export async function registerDevice(uid: string): Promise<PushStatus> {
 /** O sistema pode trocar o token a qualquer momento; mantém o documento do dispositivo atualizado. */
 export function listenToTokenRefresh(uid: string): () => void {
   if (Platform.OS === 'web') return () => undefined;
-  const subscription = Notifications.addPushTokenListener(() => {
-    getPushToken()
-      .then((pushToken) => saveDevice(uid, pushToken))
-      .catch(() => undefined);
+  // Usa o token que vem no próprio evento. Buscar o token aqui dentro faria o sistema emitir o
+  // evento de novo, em um laço infinito de gravações no Firestore.
+  const subscription = Notifications.addPushTokenListener((deviceToken) => {
+    const pushToken: Promise<PushToken> =
+      deviceToken.type === 'android'
+        ? Promise.resolve({ token: deviceToken.data, platform: 'android' as const })
+        : Notifications.getExpoPushTokenAsync({ devicePushToken: deviceToken }).then((expoToken) => ({
+            token: expoToken.data,
+            platform: 'ios' as const,
+          }));
+    pushToken.then((token) => saveDevice(uid, token)).catch(() => undefined);
   });
   return () => subscription.remove();
 }
@@ -107,6 +125,7 @@ export function listenToTokenRefresh(uid: string): () => void {
 /** Chamado no logout, ainda autenticado: este aparelho deixa de receber os pushes do usuário. */
 export async function unregisterDevice(uid: string): Promise<void> {
   if (Platform.OS === 'web') return;
+  lastSavedDevice = null;
   await deleteDoc(doc(db, 'users', uid, 'devices', await getDeviceId()));
 }
 

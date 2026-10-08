@@ -90,23 +90,45 @@ export async function addMember(requesterId: string, groupId: string, memberId: 
   await membersRef(groupId).child(memberId).set(true);
 }
 
+/** Confere se o pedido de remoção é permitido. Devolve true quando há integrante a remover. */
+function assertCanRemove(group: GroupDoc, requesterId: string, memberId: string): boolean {
+  if (group.ownerId !== requesterId) throw new HttpError(403, OWNER_ONLY);
+  if (memberId === group.ownerId) throw new HttpError(400, 'O proprietário não pode ser removido do grupo.');
+  if (!group.memberIds.includes(memberId)) return false; // já saiu: repetir a chamada não muda nada
+  if (group.memberIds.length <= MIN_GROUP_MEMBERS) {
+    throw new HttpError(409, 'O grupo precisa manter pelo menos dois integrantes.');
+  }
+  return true;
+}
+
+/**
+ * Remove um integrante revogando PRIMEIRO o acesso às mensagens. Se algo falhar no meio do caminho,
+ * a pessoa fica sem acesso e ainda listada (o proprietário vê e remove de novo), nunca o contrário.
+ */
 export async function removeMember(requesterId: string, groupId: string, memberId: string): Promise<void> {
-  await firestore.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(groupRef(groupId));
-    if (!snapshot.exists) throw new HttpError(404, 'Grupo não encontrado.');
-    const group = snapshot.data() as GroupDoc;
-    if (group.ownerId !== requesterId) throw new HttpError(403, OWNER_ONLY);
-    if (memberId === group.ownerId) throw new HttpError(400, 'O proprietário não pode ser removido do grupo.');
-    if (!group.memberIds.includes(memberId)) return;
-    if (group.memberIds.length <= MIN_GROUP_MEMBERS) {
-      throw new HttpError(409, 'O grupo precisa manter pelo menos dois integrantes.');
-    }
-    transaction.update(groupRef(groupId), {
-      memberIds: group.memberIds.filter((uid) => uid !== memberId),
-      updatedAt: Date.now(),
+  // Leitura prévia: só o proprietário pode chegar a revogar o acesso de alguém.
+  const current = await groupRef(groupId).get();
+  if (!current.exists) throw new HttpError(404, 'Grupo não encontrado.');
+  assertCanRemove(current.data() as GroupDoc, requesterId, memberId);
+
+  const mirror = membersRef(groupId).child(memberId);
+  await mirror.remove();
+  try {
+    await firestore.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(groupRef(groupId));
+      if (!snapshot.exists) throw new HttpError(404, 'Grupo não encontrado.');
+      const group = snapshot.data() as GroupDoc;
+      if (!assertCanRemove(group, requesterId, memberId)) return;
+      transaction.update(groupRef(groupId), {
+        memberIds: group.memberIds.filter((uid) => uid !== memberId),
+        updatedAt: Date.now(),
+      });
+      transaction.set(userGroupsRef(memberId), { groupIds: FieldValue.arrayRemove(groupId) }, { merge: true });
     });
-    transaction.set(userGroupsRef(memberId), { groupIds: FieldValue.arrayRemove(groupId) }, { merge: true });
-  });
-  // Revoga o acesso às mensagens. A operação é idempotente: se esta escrita falhar, repetir a chamada conclui.
-  await membersRef(groupId).child(memberId).remove();
+  } catch (error) {
+    // A remoção foi recusada (ex.: outra remoção simultânea levou o grupo ao mínimo): a pessoa
+    // continua integrante, então o acesso é devolvido.
+    if (error instanceof HttpError) await mirror.set(true);
+    throw error;
+  }
 }

@@ -26,6 +26,9 @@ const INVALID_TOKEN_CODES = new Set([
 ]);
 
 type ExpoTicket = { status: 'ok' | 'error'; details?: { error?: string } };
+type SendResult = { sent: number; invalid: Device[] };
+
+const EMPTY: SendResult = { sent: 0, invalid: [] };
 
 function chunk<T>(items: readonly T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -48,8 +51,15 @@ async function sendToAndroid(devices: Device[], content: PushContent): Promise<{
     result.responses.forEach((response, index) => {
       if (response.error && INVALID_TOKEN_CODES.has(response.error.code)) invalid.push(batch[index]);
     });
+    logRefusals('FCM', batch.length, result.responses.flatMap((response) => (response.error ? [response.error.code] : [])));
   }
   return { sent, invalid };
+}
+
+/** Registra no log por que o provedor recusou envios (só os códigos de erro, nunca os tokens). */
+function logRefusals(provider: string, total: number, codes: string[]): void {
+  if (codes.length === 0) return;
+  console.warn(`${provider} recusou ${codes.length} de ${total} envios:`, [...new Set(codes)].join(', '));
 }
 
 /** iOS: Expo Push Service, que entrega pelo APNs. */
@@ -68,6 +78,11 @@ async function sendToIos(devices: Device[], content: PushContent): Promise<{ sen
       if (ticket.status === 'ok') sent += 1;
       else if (ticket.details?.error === 'DeviceNotRegistered') invalid.push(batch[index]);
     });
+    logRefusals(
+      'Expo',
+      batch.length,
+      tickets.flatMap((ticket) => (ticket.status === 'error' ? [ticket.details?.error ?? 'desconhecido'] : [])),
+    );
   }
   return { sent, invalid };
 }
@@ -76,12 +91,18 @@ async function sendToIos(devices: Device[], content: PushContent): Promise<{ sen
 export async function sendPush(devices: readonly Device[], content: PushContent): Promise<{ sent: number; failed: number }> {
   const android = devices.filter((device) => device.platform === 'android');
   const ios = devices.filter((device) => device.platform === 'ios');
-  const results = await Promise.all([
-    android.length ? sendToAndroid(android, content) : { sent: 0, invalid: [] },
-    ios.length ? sendToIos(ios, content) : { sent: 0, invalid: [] },
+  // Um provedor fora do ar não pode derrubar o envio do outro: se o Expo falhar depois de o FCM já
+  // ter entregue, a chamada ainda termina bem e o recibo fica, evitando push repetido em um reenvio.
+  const outcomes = await Promise.allSettled([
+    android.length ? sendToAndroid(android, content) : EMPTY,
+    ios.length ? sendToIos(ios, content) : EMPTY,
   ]);
-  const sent = results[0].sent + results[1].sent;
-  const invalid = [...results[0].invalid, ...results[1].invalid];
-  await Promise.all(invalid.map((device) => device.ref.delete()));
+  const results = outcomes.map((outcome) => {
+    if (outcome.status === 'fulfilled') return outcome.value;
+    console.warn('Envio de push falhou:', outcome.reason instanceof Error ? outcome.reason.message : outcome.reason);
+    return EMPTY;
+  });
+  const sent = results.reduce((total, result) => total + result.sent, 0);
+  await Promise.allSettled(results.flatMap((result) => result.invalid).map((device) => device.ref.delete()));
   return { sent, failed: devices.length - sent };
 }

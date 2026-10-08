@@ -4,13 +4,11 @@ import { getDatabase } from 'firebase-admin/database';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 
+import { normalizePrivateKey } from '../privateKey';
+
 const projectId = process.env.FIREBASE_PROJECT_ID;
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-// A chave costuma ser colada direto do JSON da conta de serviço: em uma linha, com "\n" literais
-// e às vezes ainda entre aspas. Normaliza esses formatos para o PEM que o Admin SDK espera.
-const privateKey = process.env.FIREBASE_PRIVATE_KEY?.trim()
-  .replace(/^"|"$/g, '')
-  .replace(/\\n/g, '\n');
+const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+const privateKey = normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY);
 
 const usingEmulators = Boolean(process.env.FIRESTORE_EMULATOR_HOST);
 
@@ -32,3 +30,12 @@ export const auth = getAuth(app);
 export const firestore = getFirestore(app);
 export const rtdb = getDatabase(app);
 export const messaging = getMessaging(app);
+
+/**
+ * Pede um token de acesso ao Google com a credencial configurada. Uma chave que só "parece" válida
+ * (revogada, de outro projeto, e-mail trocado) é recusada aqui, antes de a API aceitar requisições.
+ */
+export async function verifyCredential(): Promise<void> {
+  if (usingEmulators) return;
+  await app.options.credential?.getAccessToken();
+}

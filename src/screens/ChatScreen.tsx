@@ -1,14 +1,6 @@
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import {
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  type ListRenderItemInfo,
-} from 'react-native';
+import { FlatList, KeyboardAvoidingView, Pressable, StyleSheet, Text, type ListRenderItemInfo } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '../components/Avatar';
@@ -99,11 +91,8 @@ export function ChatScreen({ navigation, route }: ScreenProps<'Chat'>) {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={headerHeight}
-      >
+      {/* "padding" nas duas plataformas: no Android (edge-to-edge) a janela não encolhe para o teclado. */}
+      <KeyboardAvoidingView style={styles.container} behavior="padding" keyboardVerticalOffset={headerHeight}>
         <OfflineBanner />
         <ErrorMessage message={noAccess ? 'Você não faz mais parte deste grupo.' : error} />
         {loading ? (

@@ -15,6 +15,8 @@ export type AuthContextValue = {
   signOut: () => Promise<void>;
 };
 
+const LOGOUT_WAIT_MS = 5000;
+
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 /** Disponível só dentro das telas autenticadas; nunca é null enquanto elas estão montadas. */
@@ -55,8 +57,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const uid = user?.uid;
-    // Remove o token deste aparelho antes de sair, enquanto ainda há permissão para isso.
-    if (uid) await unregisterDevice(uid).catch(() => undefined);
+    if (uid) {
+      // Remove o token deste aparelho antes de sair, enquanto ainda há permissão para isso.
+      // A espera é limitada: sem internet o Firestore só confirma a exclusão quando a conexão volta,
+      // e o logout não pode ficar preso. Se o tempo esgotar, o token sai quando o FCM o invalidar.
+      await Promise.race([
+        unregisterDevice(uid).catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, LOGOUT_WAIT_MS)),
+      ]);
+    }
     await authService.signOut();
   }, [user?.uid]);
 
